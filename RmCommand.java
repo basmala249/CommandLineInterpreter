@@ -1,108 +1,86 @@
 package org.example;
-
 import java.io.File;
 import java.util.Scanner;
 
-public class RmCommand implements Command {//inherir from command and imlement execute functiom
+
+public class RmCommand implements Command {
 
     @Override
     public void execute(String[] args) {
-        //remove from input command instruction
-        if (args[0].equals("rm")) {
+        if (args.length < 1) {
+            System.out.println("Error: No path provided.");
+            return;
+        }
+        if(args[0].equals("rm")) {
             args = java.util.Arrays.copyOfRange(args, 1, args.length);
-            //take substr
         }
-        // if user import rm only
-        if (args.length == 0) {
-            System.out.println("Usage: rm [options] <file/directory>");
+        boolean recursive = false;
+        String path = args[args.length - 1];
+
+        // Check if the recursive flag is provided
+        if (args.length > 1 && args[0].equals("-r")) {
+            recursive = true;
+        }
+
+        // Resolve the path
+        File target = new File(path);
+        if (!target.isAbsolute()) {
+            target = new File(CommandLineInterface.currentDirectory, path);
+        }
+
+        if (!target.exists()) {
+            System.out.println("Error: Path does not exist.");
             return;
         }
 
-        boolean force = false;//if file is unwritable check if i can delet it or not
-        boolean recursive = false;//in directory to check if i will remove every file and folder inside it
-        int index = 0;
-
-        // Parse command line options
-        while (index < args.length) {
-            String arg = args[index];
-            if (arg.equals("-f") || arg.equals("--force")) {
-                force = true;//true give permission for file deletion
-            } else if (arg.equals("-r")) {
-                recursive = true;//true to remove eacg file and directory inside directory
-            } else {
-                // Handle file/directory removal
-                File target = getFileFromPath(arg);//this return file or directory where this file or folder located
-                remove(target, force, recursive);// then pass it to remove function
-            }
-            index++;
+        // If it's a file, ask for permission to delete
+        if (target.isFile()) {
+            askForFileDeletion(target);
         }
-    }
-
-    private File getFileFromPath(String path) {
-        File file = new File(path);
-        if (!file.isAbsolute()) {
-            return new File(CommandLineInterface.currentDirectory, path);
-        }
-        return file;
-    }
-
-    private void remove(File file, boolean force, boolean recursive) {
-        if (!file.exists()) {// checks if file available or not exists
-            System.out.println("Error: " + file.getPath() + " does not exist.");
-            return;
-        }
-
-        if (file.isDirectory()) {//if file is directory
-            if (recursive || file.list().length == 0) {
-                // if directory is empty so delete without using -r or if the command includes -r so delete the recursive part till leaf
-                deleteDirectory(file);//goes to delete dictionary
-            } else {
-                //this mean that directory is recursive then and there is no -r included so you should include it
-                System.out.println("Error: " + file.getName() + " is a directory. Use -r to remove it.");
-            }
-        } else {
-            //check if i can delete file or not through two ways first user gives force so command has the right to delete it
-            //or i will ask user at the runtime to check
-            if (force || confirmRemoval(file.getName())) {
-                if (file.delete()) {//file deleted succesfully
-                    System.out.println("Removed: " + file.getName());
-                } else {
-                    System.out.println("Error: Unable to remove " + file.getName());// Not able to delete this file
-                }
-            } else {
-                //this mean no confirm to delete this file
-                System.out.println("Skipped: " + file.getName());
+        // If it's a directory, handle based on recursive flag and contents
+        else if (target.isDirectory()) {
+            if (target.list().length == 0) { // Directory is empty
+                deleteDirectory(target);
+            } else if (recursive) { // Directory is not empty, and -r is provided
+                deleteDirectoryRecursively(target);
+            } else { // Directory is not empty, and -r is not provided
+                System.out.println("Error: Directory is not empty. Use -r to delete recursively.");
             }
         }
     }
 
-    private boolean confirmRemoval(String fileName) {
+    private void askForFileDeletion(File file) {
         Scanner scanner = new Scanner(System.in);
-        //take from user yes ot no to check if i have the acees to delete the file
-        System.out.print("Remove " + fileName + "? (y/n): ");
-        String response = scanner.nextLine();
-        return response.trim().toLowerCase().startsWith("y");//retun true if it is working
+        System.out.print("Are you sure you want to delete " + file.getName() + "? (y/n): ");
+        String input = scanner.nextLine();
+        if (input.equalsIgnoreCase("y")) {
+            if (file.delete()) {
+                System.out.println(file.getName() + " deleted successfully.");
+            } else {
+                System.out.println("Error: Could not delete " + file.getName());
+            }
+        } else {
+            System.out.println("File deletion canceled.");
+        }
     }
 
-    private void deleteDirectory(File directory) {
-        File[] files = directory.listFiles();// list all folder inside directory
-        if (files != null) {//if not empty will remove it
-            for (File file : files) {//loop on files and if it is directory it will recurse on it again till arrive to the leaf
-                if (file.isDirectory()) {
-                    deleteDirectory(file);//this is the recursive part
-                } else {
-                    if (file.delete()) {
-                        System.out.println("Removed: " + file.getName());
-                    } else {
-                        System.out.println("Error: Unable to remove " + file.getName());
-                    }
-                }
+    private void deleteDirectory(File dir) {
+        if (dir.delete()) {
+            System.out.println("Directory " + dir.getName() + " deleted successfully.");
+        } else {
+            System.out.println("Error: Could not delete directory " + dir.getName());
+        }
+    }
+
+    private void deleteDirectoryRecursively(File dir) {
+        for (File file : dir.listFiles()) {
+            if (file.isDirectory()) {
+                deleteDirectoryRecursively(file);
+            } else {
+                System.out.println("File " + file.getName() + " deleted successfully.");
+                file.delete();
             }
         }
-        if (directory.delete()) {//finally after deleting any inside files or directories , then delete directory
-            System.out.println("Removed directory: " + directory.getName());
-        } else {
-            System.out.println("Error: Unable to remove directory " + directory.getName());
-        }
+        deleteDirectory(dir); // Delete the directory after all contents are deleted
     }
 }
